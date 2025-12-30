@@ -7,6 +7,8 @@ import (
 	"errors"
 	"sort"
 	"strings"
+
+	"golang.org/x/text/unicode/norm"
 )
 
 var (
@@ -223,9 +225,21 @@ func PhraseDecodeExplicit(phrase []string, lang *Language) ([]uint16, error) {
 	return indices, nil
 }
 
+// utf8NFKDLazy only normalizes strings that contain non-ASCII characters
+func utf8NFKDLazy(str string) string {
+	// Check if string contains non-ASCII characters
+	for _, r := range str {
+		if r > 127 {
+			return norm.NFKD.String(str)
+		}
+	}
+	return str
+}
+
 // SplitPhrase splits a mnemonic string into words
-func SplitPhrase(str string, utf8NFKDLazy func(string) string) []string {
-	// Normalize to NFKD first
+// It normalizes the string using NFKD decomposition before splitting
+func SplitPhrase(str string) []string {
+	// Normalize to NFKD first (lazy - only if non-ASCII)
 	normalized := utf8NFKDLazy(str)
 	
 	// Split on spaces

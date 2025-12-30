@@ -11,7 +11,7 @@ import (
 
 	"golang.org/x/crypto/pbkdf2"
 	"golang.org/x/text/unicode/norm"
-	
+
 	"polyseed/internal"
 	"polyseed/lang"
 )
@@ -166,8 +166,8 @@ func utf8NFKD(str string) string {
 	return norm.NFKD.String(str)
 }
 
-// utf8NFKDLazy only normalizes strings that contain non-ASCII characters
-func utf8NFKDLazy(str string) string {
+// UTF8NFKDLazy only normalizes strings that contain non-ASCII characters
+func UTF8NFKDLazy(str string) string {
 	// Check if string contains non-ASCII characters
 	for _, r := range str {
 		if r > 127 {
@@ -271,10 +271,10 @@ func (s *Seed) Encode(lang *lang.Language, coin Coin) string {
 // Decode decodes the seed from a mnemonic phrase
 func Decode(str string, coin Coin) (*Seed, *lang.Language, error) {
 	// Canonical decomposition
-	strNorm := utf8NFKDLazy(str)
+	strNorm := UTF8NFKDLazy(str)
 
 	// Split into words
-	words := lang.SplitPhrase(strNorm, utf8NFKDLazy)
+	words := lang.SplitPhrase(strNorm)
 	if len(words) != NumWords {
 		return nil, nil, StatusErrNumWords
 	}
@@ -323,10 +323,10 @@ func Decode(str string, coin Coin) (*Seed, *lang.Language, error) {
 // DecodeExplicit decodes the seed from a mnemonic phrase with a specific language
 func DecodeExplicit(str string, coin Coin, foundLang *lang.Language) (*Seed, error) {
 	// Canonical decomposition
-	strNorm := utf8NFKDLazy(str)
+	strNorm := UTF8NFKDLazy(str)
 
 	// Split into words
-	words := lang.SplitPhrase(strNorm, utf8NFKDLazy)
+	words := lang.SplitPhrase(strNorm)
 	if len(words) != NumWords {
 		return nil, StatusErrNumWords
 	}
@@ -484,5 +484,15 @@ func Load(storage *Storage) (*Seed, error) {
 	seed := seedFromData(d)
 
 	return seed, nil
+}
+
+// GetNumLangs returns the number of supported languages
+func GetNumLangs() int {
+	return lang.GetNumLangs()
+}
+
+// GetLang returns a language by its index
+func GetLang(i int) *lang.Language {
+	return lang.GetLang(i)
 }
 
