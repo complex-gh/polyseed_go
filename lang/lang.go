@@ -1,16 +1,40 @@
 // Copyright (c) 2025 complex (complex@ft.hn)
 // See LICENSE for licensing information
 
-package polyseed
+package lang
 
 import (
+	"errors"
 	"sort"
 	"strings"
 )
 
+var (
+	// ErrLang indicates unknown language or unsupported words
+	ErrLang = errors.New("unknown language or unsupported words")
+	// ErrMultLang indicates phrase matches more than one language
+	ErrMultLang = errors.New("phrase matches more than one language")
+)
+
 const (
 	numCharsPrefix = 4
+	// LangSize is the number of words in each language wordlist
+	LangSize = 2048
+	// NumWords is the number of words in the mnemonic phrase
+	NumWords = 16
 )
+
+// Language represents a language wordlist
+type Language struct {
+	Name       string
+	NameEn     string
+	Separator  string
+	IsSorted   bool
+	HasPrefix  bool
+	HasAccents bool
+	Compose    bool
+	Words      [LangSize]string
+}
 
 var (
 	// languages contains all supported languages
@@ -32,12 +56,12 @@ func GetLang(i int) *Language {
 
 // GetLangName returns the native name of a language
 func (l *Language) GetLangName() string {
-	return l.name
+	return l.Name
 }
 
 // GetLangNameEn returns the English name of a language
 func (l *Language) GetLangNameEn() string {
-	return l.nameEn
+	return l.NameEn
 }
 
 // compareStr compares two strings
@@ -125,12 +149,12 @@ func langSearch(lang *Language, word string, usePrefix, useNoAccent bool) int {
 		}
 	}
 	
-	if lang.isSorted {
+	if lang.IsSorted {
 		// Binary search for sorted wordlists
 		idx := sort.Search(LangSize, func(i int) bool {
-			return cmp(word, lang.words[i]) <= 0
+			return cmp(word, lang.Words[i]) <= 0
 		})
-		if idx < LangSize && cmp(word, lang.words[idx]) == 0 {
+		if idx < LangSize && cmp(word, lang.Words[idx]) == 0 {
 			return idx
 		}
 		return -1
@@ -138,7 +162,7 @@ func langSearch(lang *Language, word string, usePrefix, useNoAccent bool) int {
 	
 	// Linear search for unsorted wordlists
 	for i := 0; i < LangSize; i++ {
-		if cmp(word, lang.words[i]) == 0 {
+		if cmp(word, lang.Words[i]) == 0 {
 			return i
 		}
 	}
@@ -147,11 +171,11 @@ func langSearch(lang *Language, word string, usePrefix, useNoAccent bool) int {
 
 // FindWord finds a word in a language wordlist
 func (l *Language) FindWord(word string) int {
-	return langSearch(l, word, l.hasPrefix, l.hasAccents)
+	return langSearch(l, word, l.HasPrefix, l.HasAccents)
 }
 
-// phraseDecode decodes a phrase into word indices, auto-detecting the language
-func phraseDecode(phrase []string) ([]uint16, *Language, error) {
+// PhraseDecode decodes a phrase into word indices, auto-detecting the language
+func PhraseDecode(phrase []string) ([]uint16, *Language, error) {
 	var foundLang *Language
 	var foundIndices []uint16
 	
@@ -170,7 +194,7 @@ func phraseDecode(phrase []string) ([]uint16, *Language, error) {
 		
 		if success {
 			if foundLang != nil {
-				return nil, nil, StatusErrMultLang
+				return nil, nil, ErrMultLang
 			}
 			foundLang = lang
 			foundIndices = indices
@@ -178,20 +202,20 @@ func phraseDecode(phrase []string) ([]uint16, *Language, error) {
 	}
 	
 	if foundLang == nil {
-		return nil, nil, StatusErrLang
+		return nil, nil, ErrLang
 	}
 	
 	return foundIndices, foundLang, nil
 }
 
-// phraseDecodeExplicit decodes a phrase using a specific language
-func phraseDecodeExplicit(phrase []string, lang *Language) ([]uint16, error) {
+// PhraseDecodeExplicit decodes a phrase using a specific language
+func PhraseDecodeExplicit(phrase []string, lang *Language) ([]uint16, error) {
 	indices := make([]uint16, NumWords)
 	
 	for i, word := range phrase {
 		idx := lang.FindWord(word)
 		if idx < 0 {
-			return nil, StatusErrLang
+			return nil, ErrLang
 		}
 		indices[i] = uint16(idx)
 	}
@@ -199,8 +223,8 @@ func phraseDecodeExplicit(phrase []string, lang *Language) ([]uint16, error) {
 	return indices, nil
 }
 
-// splitPhrase splits a mnemonic string into words
-func splitPhrase(str string) []string {
+// SplitPhrase splits a mnemonic string into words
+func SplitPhrase(str string, utf8NFKDLazy func(string) string) []string {
 	// Normalize to NFKD first
 	normalized := utf8NFKDLazy(str)
 	

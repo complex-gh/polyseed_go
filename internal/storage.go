@@ -1,7 +1,7 @@
 // Copyright (c) 2025 complex (complex@ft.hn)
 // See LICENSE for licensing information
 
-package polyseed
+package internal
 
 import (
 	"encoding/binary"
@@ -13,10 +13,10 @@ const (
 	extraByte     = 0xFF
 	storageFooter = 0x7000
 
-	secretSize = 19
+	SecretSize = 19
 	secretBits = 150
-	clearBits  = (secretSize * 8) - secretBits
-	clearMask  = ^uint8(((1 << clearBits) - 1) << (8 - clearBits))
+	clearBits  = (SecretSize * 8) - secretBits
+	ClearMask  = ^uint8(((1 << clearBits) - 1) << (8 - clearBits))
 )
 
 // store16 stores a 16-bit value in little-endian format
@@ -29,8 +29,19 @@ func load16(p []byte) uint16 {
 	return binary.LittleEndian.Uint16(p)
 }
 
-// dataStore serializes seed data into storage format
-func dataStore(d *data, storage *Storage) {
+// StatusErrFormat indicates invalid seed format
+var StatusErrFormat = &storageError{msg: "invalid seed format"}
+
+type storageError struct {
+	msg string
+}
+
+func (e *storageError) Error() string {
+	return e.msg
+}
+
+// DataStore serializes seed data into storage format
+func DataStore(d *Data, storage *[32]byte) {
 	pos := 0
 
 	// Header
@@ -38,23 +49,23 @@ func dataStore(d *data, storage *Storage) {
 	pos += headerSize
 
 	// Features and birthday
-	store16(storage[pos:], uint16(d.features)<<dateBits|uint16(d.birthday))
+	store16(storage[pos:], uint16(d.Features)<<DateBits|uint16(d.Birthday))
 	pos += 2
 
 	// Secret
-	copy(storage[pos:], d.secret[:secretSize])
-	pos += secretSize
+	copy(storage[pos:], d.Secret[:SecretSize])
+	pos += SecretSize
 
 	// Extra byte
 	storage[pos] = extraByte
 	pos++
 
 	// Footer and checksum
-	store16(storage[pos:], storageFooter|d.checksum)
+	store16(storage[pos:], storageFooter|d.Checksum)
 }
 
-// dataLoad deserializes seed data from storage format
-func dataLoad(storage *Storage, d *data) error {
+// DataLoad deserializes seed data from storage format
+func DataLoad(storage *[32]byte, d *Data) error {
 	pos := 0
 
 	// Check header
@@ -65,23 +76,23 @@ func dataLoad(storage *Storage, d *data) error {
 
 	// Load features and birthday
 	v1 := load16(storage[pos:])
-	d.birthday = uint16(v1 & dateMask)
-	v1 >>= dateBits
-	if v1 > featureMask {
+	d.Birthday = uint16(v1 & DateMask)
+	v1 >>= DateBits
+	if v1 > FeatureMask {
 		return StatusErrFormat
 	}
-	d.features = uint8(v1)
+	d.Features = uint8(v1)
 	pos += 2
 
 	// Load secret
-	for i := range d.secret {
-		d.secret[i] = 0
+	for i := range d.Secret {
+		d.Secret[i] = 0
 	}
-	copy(d.secret[:], storage[pos:pos+secretSize])
-	if d.secret[secretSize-1]&^clearMask != 0 {
+	copy(d.Secret[:], storage[pos:pos+SecretSize])
+	if d.Secret[SecretSize-1]&^ClearMask != 0 {
 		return StatusErrFormat
 	}
-	pos += secretSize
+	pos += SecretSize
 
 	// Check extra byte
 	if storage[pos] != extraByte {
@@ -91,71 +102,12 @@ func dataLoad(storage *Storage, d *data) error {
 
 	// Check footer and load checksum
 	v2 := load16(storage[pos:])
-	d.checksum = uint16(v2 & gfMask)
-	v2 &^= gfMask
+	d.Checksum = uint16(v2 & GfMask)
+	v2 &^= GfMask
 	if v2 != storageFooter {
 		return StatusErrFormat
 	}
 
 	return nil
-}
-
-// Store serializes the seed data in a platform-independent way
-func (s *Seed) Store(storage *Storage) {
-	d := s.toData()
-	dataStore(d, storage)
-	memzero(d.secret[:])
-}
-
-// Load deserializes a seed from storage format
-func Load(storage *Storage) (*Seed, error) {
-	d := &data{}
-	if err := dataLoad(storage, d); err != nil {
-		return nil, err
-	}
-
-	// Verify checksum
-	p := &gfPoly{}
-	p.coeff[0] = gfElem(d.checksum)
-	dataToPoly(d, p)
-	if !p.check() {
-		memzero(d.secret[:])
-		return nil, StatusErrChecksum
-	}
-
-	// Check features
-	if !featuresSupported(d.features) {
-		memzero(d.secret[:])
-		return nil, StatusErrUnsupported
-	}
-
-	seed := &Seed{
-		birthday: d.birthday,
-		features: d.features,
-		secret:   d.secret,
-		checksum: d.checksum,
-	}
-
-	return seed, nil
-}
-
-// toData converts a Seed to internal data format
-func (s *Seed) toData() *data {
-	return &data{
-		birthday: s.birthday,
-		features: s.features,
-		secret:   s.secret,
-		checksum: s.checksum,
-	}
-}
-
-// fromData creates a Seed from internal data format
-func seedFromData(d *data) *Seed {
-	return &Seed{
-		birthday: d.birthday,
-		features: d.features,
-		secret:   d.secret,
-		checksum: d.checksum,
-	}
 }
 

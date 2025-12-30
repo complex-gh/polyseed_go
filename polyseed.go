@@ -11,6 +11,9 @@ import (
 
 	"golang.org/x/crypto/pbkdf2"
 	"golang.org/x/text/unicode/norm"
+	
+	"polyseed/internal"
+	"polyseed/lang"
 )
 
 // Constants
@@ -109,25 +112,26 @@ type Seed struct {
 	checksum  uint16
 }
 
-// Data represents the internal seed data structure
-type data struct {
-	birthday uint16
-	features uint8
-	secret   [32]byte
-	checksum uint16
+// toData converts a Seed to internal data format
+func (s *Seed) toData() *internal.Data {
+	return &internal.Data{
+		Birthday: s.birthday,
+		Features: s.features,
+		Secret:   s.secret,
+		Checksum: s.checksum,
+	}
 }
 
-// Language represents a language wordlist
-type Language struct {
-	name       string
-	nameEn     string
-	separator  string
-	isSorted   bool
-	hasPrefix  bool
-	hasAccents bool
-	compose    bool
-	words      [LangSize]string
+// seedFromData creates a Seed from internal data format
+func seedFromData(d *internal.Data) *Seed {
+	return &Seed{
+		birthday: d.Birthday,
+		features: d.Features,
+		secret:   d.Secret,
+		checksum: d.Checksum,
+	}
 }
+
 
 var (
 	// reservedFeatures tracks which feature bits are reserved
@@ -202,21 +206,21 @@ func Create(features uint8) (*Seed, error) {
 	}
 
 	// Generate random secret
-	if err := getRandomBytes(seed.secret[:secretSize]); err != nil {
+	if err := getRandomBytes(seed.secret[:internal.SecretSize]); err != nil {
 		return nil, StatusErrMemory
 	}
-	seed.secret[secretSize-1] &= clearMask
+	seed.secret[internal.SecretSize-1] &= internal.ClearMask
 
 	// Encode polynomial
 	d := seed.toData()
-	p := &gfPoly{}
-	dataToPoly(d, p)
+	p := &internal.GfPoly{}
+	internal.DataToPoly(d, p)
 
 	// Calculate checksum
-	p.encode()
-	seed.checksum = uint16(p.coeff[0])
+	p.Encode()
+	seed.checksum = uint16(p.Coeff[0])
 
-	memzero(d.secret[:])
+	memzero(d.Secret[:])
 
 	return seed, nil
 }
@@ -237,117 +241,126 @@ func (s *Seed) GetFeature(mask uint8) uint8 {
 }
 
 // Encode encodes the mnemonic seed into a string
-func (s *Seed) Encode(lang *Language, coin Coin) string {
+func (s *Seed) Encode(lang *lang.Language, coin Coin) string {
 	d := s.toData()
-	p := &gfPoly{}
-	p.coeff[0] = gfElem(d.checksum)
-	dataToPoly(d, p)
+	p := &internal.GfPoly{}
+	p.Coeff[0] = internal.GfElem(d.Checksum)
+	internal.DataToPoly(d, p)
 
 	// Apply coin
-	p.coeff[polyNumCheckDigits] ^= gfElem(coin)
+	p.Coeff[internal.PolyNumCheckDigits] ^= internal.GfElem(coin)
 
 	// Build phrase
 	var words []string
 	for i := 0; i < NumWords; i++ {
-		words = append(words, lang.words[p.coeff[i]])
+		words = append(words, lang.Words[p.Coeff[i]])
 	}
 
-	phrase := strings.Join(words, lang.separator)
+	phrase := strings.Join(words, lang.Separator)
 
 	// Compose if needed by the language
-	if lang.compose {
+	if lang.Compose {
 		phrase = utf8NFC(phrase)
 	}
 
-	memzero(d.secret[:])
+	memzero(d.Secret[:])
 
 	return phrase
 }
 
 // Decode decodes the seed from a mnemonic phrase
-func Decode(str string, coin Coin) (*Seed, *Language, error) {
+func Decode(str string, coin Coin) (*Seed, *lang.Language, error) {
 	// Canonical decomposition
 	strNorm := utf8NFKDLazy(str)
 
 	// Split into words
-	words := splitPhrase(strNorm)
+	words := lang.SplitPhrase(strNorm, utf8NFKDLazy)
 	if len(words) != NumWords {
 		return nil, nil, StatusErrNumWords
 	}
 
 	// Decode words into polynomial coefficients
-	indices, lang, err := phraseDecode(words)
+	indices, foundLang, err := lang.PhraseDecode(words)
 	if err != nil {
+		if err == lang.ErrLang {
+			return nil, nil, StatusErrLang
+		}
+		if err == lang.ErrMultLang {
+			return nil, nil, StatusErrMultLang
+		}
 		return nil, nil, err
 	}
 
 	// Build polynomial
-	p := &gfPoly{}
+	p := &internal.GfPoly{}
 	for i, idx := range indices {
-		p.coeff[i] = gfElem(idx)
+		p.Coeff[i] = internal.GfElem(idx)
 	}
 
 	// Finalize polynomial
-	p.coeff[polyNumCheckDigits] ^= gfElem(coin)
+	p.Coeff[internal.PolyNumCheckDigits] ^= internal.GfElem(coin)
 
 	// Check checksum
-	if !p.check() {
+	if !p.Check() {
 		return nil, nil, StatusErrChecksum
 	}
 
 	// Decode polynomial into seed data
-	d := &data{}
-	polyToData(p, d)
+	d := &internal.Data{}
+	internal.PolyToData(p, d)
 
 	// Check features
-	if !featuresSupported(d.features) {
-		memzero(d.secret[:])
+	if !featuresSupported(d.Features) {
+		memzero(d.Secret[:])
 		return nil, nil, StatusErrUnsupported
 	}
 
 	seed := seedFromData(d)
 
-	return seed, lang, nil
+	return seed, foundLang, nil
 }
 
 // DecodeExplicit decodes the seed from a mnemonic phrase with a specific language
-func DecodeExplicit(str string, coin Coin, lang *Language) (*Seed, error) {
+func DecodeExplicit(str string, coin Coin, foundLang *lang.Language) (*Seed, error) {
 	// Canonical decomposition
 	strNorm := utf8NFKDLazy(str)
 
 	// Split into words
-	words := splitPhrase(strNorm)
+	words := lang.SplitPhrase(strNorm, utf8NFKDLazy)
 	if len(words) != NumWords {
 		return nil, StatusErrNumWords
 	}
 
 	// Decode words into polynomial coefficients
-	indices, err := phraseDecodeExplicit(words, lang)
+	indices, err := lang.PhraseDecodeExplicit(words, foundLang)
 	if err != nil {
+		if err == lang.ErrLang {
+			return nil, StatusErrLang
+		}
 		return nil, err
 	}
 
 	// Build polynomial
-	p := &gfPoly{}
+	p := &internal.GfPoly{}
 	for i, idx := range indices {
-		p.coeff[i] = gfElem(idx)
+		p.Coeff[i] = internal.GfElem(idx)
 	}
 
 	// Finalize polynomial
-	p.coeff[polyNumCheckDigits] ^= gfElem(coin)
+	p.Coeff[internal.PolyNumCheckDigits] ^= internal.GfElem(coin)
 
 	// Check checksum
-	if !p.check() {
+	if !p.Check() {
 		return nil, StatusErrChecksum
 	}
 
 	// Decode polynomial into seed data
-	d := &data{}
-	polyToData(p, d)
+	d := &internal.Data{}
+	internal.PolyToData(p, d)
 
 	// Check features
-	if !featuresSupported(d.features) {
-		memzero(d.secret[:])
+	if !featuresSupported(d.Features) {
+		memzero(d.Secret[:])
 		return nil, StatusErrUnsupported
 	}
 
@@ -381,15 +394,15 @@ func (s *Seed) Keygen(coin Coin, keySize int) []byte {
 	store32(salt[16:], uint32(coin))
 
 	// Domain separate by birthday (32-bit)
-	store32(salt[20:], uint32(d.birthday))
+	store32(salt[20:], uint32(d.Birthday))
 
 	// Domain separate by features (32-bit)
-	store32(salt[24:], uint32(d.features))
+	store32(salt[24:], uint32(d.Features))
 
 	// Use full secret buffer (32 bytes) for PBKDF2
-	key := pbkdf2SHA256(d.secret[:], salt, kdfNumIterations, keySize)
+	key := pbkdf2SHA256(d.Secret[:], salt, kdfNumIterations, keySize)
 
-	memzero(d.secret[:])
+	memzero(d.Secret[:])
 
 	return key
 }
@@ -409,30 +422,67 @@ func (s *Seed) Crypt(password string) {
 	mask := pbkdf2SHA256(passBytes, salt, kdfNumIterations, 32)
 
 	// Apply mask
-	for i := 0; i < secretSize; i++ {
-		d.secret[i] ^= mask[i]
+	for i := 0; i < internal.SecretSize; i++ {
+		d.Secret[i] ^= mask[i]
 	}
-	d.secret[secretSize-1] &= clearMask
+	d.Secret[internal.SecretSize-1] &= internal.ClearMask
 
-	d.features ^= encryptedMask
+	d.Features ^= encryptedMask
 
 	// Encode polynomial
-	p := &gfPoly{}
-	dataToPoly(d, p)
+	p := &internal.GfPoly{}
+	internal.DataToPoly(d, p)
 
 	// Calculate new checksum
-	p.encode()
+	p.Encode()
 
-	s.checksum = uint16(p.coeff[0])
-	s.features = d.features
-	copy(s.secret[:], d.secret[:])
+	s.checksum = uint16(p.Coeff[0])
+	s.features = d.Features
+	copy(s.secret[:], d.Secret[:])
 
-	memzero(d.secret[:])
+	memzero(d.Secret[:])
 	memzero(mask)
 }
 
 // IsEncrypted determines if the seed contents are encrypted
 func (s *Seed) IsEncrypted() bool {
 	return isEncrypted(s.features)
+}
+
+// Store serializes the seed data in a platform-independent way
+func (s *Seed) Store(storage *Storage) {
+	d := s.toData()
+	internal.DataStore(d, (*[32]byte)(storage))
+	memzero(d.Secret[:])
+}
+
+// Load deserializes a seed from storage format
+func Load(storage *Storage) (*Seed, error) {
+	d := &internal.Data{}
+	if err := internal.DataLoad((*[32]byte)(storage), d); err != nil {
+		if err == internal.StatusErrFormat {
+			return nil, StatusErrFormat
+		}
+		return nil, err
+	}
+
+	// Verify checksum
+	p := &internal.GfPoly{}
+	p.Coeff[0] = internal.GfElem(d.Checksum)
+	internal.DataToPoly(d, p)
+	if !p.Check() {
+		memzero(d.Secret[:])
+		return nil, StatusErrChecksum
+	}
+
+	// Check features
+	if !featuresSupported(d.Features) {
+		memzero(d.Secret[:])
+		return nil, StatusErrUnsupported
+	}
+
+	seed := seedFromData(d)
+
+	return seed, nil
 }
 

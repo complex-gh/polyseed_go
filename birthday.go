@@ -10,11 +10,17 @@ const (
 	// timeStep is 30.436875 days = 1/12 of the Gregorian year
 	timeStep = uint64(2629746)
 
-	// dateBits is the number of bits used for the birthday
-	dateBits = 10
+	// DateBits is the number of bits used for the birthday
+	DateBits = 10
 
-	// dateMask is the mask for date bits
-	dateMask = (1 << dateBits) - 1
+	// dateBits is the number of bits used for the birthday (internal alias)
+	dateBits = DateBits
+
+	// DateMask is the mask for date bits
+	DateMask = (1 << DateBits) - 1
+
+	// dateMask is the mask for date bits (internal alias)
+	dateMask = DateMask
 )
 
 // birthdayEncode converts a Unix timestamp to a birthday value
