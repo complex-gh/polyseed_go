@@ -80,9 +80,6 @@ func comparePrefix(key, elm string) int {
 		if len(keyRunes) == 0 {
 			break
 		}
-		if i >= numCharsPrefix && len(keyRunes) == 1 {
-			break
-		}
 		if len(elmRunes) == 0 {
 			break
 		}
@@ -91,6 +88,10 @@ func comparePrefix(key, elm string) int {
 		}
 		keyRunes = keyRunes[1:]
 		elmRunes = elmRunes[1:]
+		// Stop after matching prefix (4 chars) if only one char remains
+		if i >= numCharsPrefix && len(keyRunes) == 1 {
+			break
+		}
 	}
 	
 	if len(keyRunes) == 0 && len(elmRunes) == 0 {
@@ -101,6 +102,13 @@ func comparePrefix(key, elm string) int {
 	}
 	if len(elmRunes) == 0 {
 		return 1
+	}
+	// If both have remaining characters, check if they match
+	if len(keyRunes) > 0 && len(elmRunes) > 0 && keyRunes[0] == elmRunes[0] {
+		// Check if both are now empty after this match
+		if len(keyRunes) == 1 && len(elmRunes) == 1 {
+			return 0
+		}
 	}
 	if keyRunes[0] < elmRunes[0] {
 		return -1
