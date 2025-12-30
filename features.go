@@ -7,14 +7,8 @@ const (
 	// FeatureBits is the total number of feature bits
 	FeatureBits = 5
 
-	// featureBits is the total number of feature bits (internal alias)
-	featureBits = FeatureBits
-
 	// FeatureMask is the mask for all feature bits
 	FeatureMask = (1 << FeatureBits) - 1
-
-	// featureMask is the mask for all feature bits (internal alias)
-	featureMask = FeatureMask
 
 	// internalFeatures is the number of internal feature bits
 	internalFeatures = 2
@@ -57,7 +51,7 @@ func featuresSupported(features uint8) bool {
 // Returns the number of features that were enabled (0, 1, 2 or 3).
 func EnableFeatures(mask uint8) int {
 	numEnabled := 0
-	reservedFeatures = featureMask ^ encryptedMask
+	reservedFeatures = FeatureMask ^ encryptedMask
 	for i := 0; i < userFeatures; i++ {
 		fmask := uint8(1 << i)
 		if mask&fmask != 0 {

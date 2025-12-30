@@ -135,7 +135,7 @@ func seedFromData(d *internal.Data) *Seed {
 
 var (
 	// reservedFeatures tracks which feature bits are reserved
-	reservedFeatures uint8 = featureMask ^ encryptedMask
+	reservedFeatures uint8 = FeatureMask ^ encryptedMask
 )
 
 // memzero securely erases memory by overwriting it with zeros

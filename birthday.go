@@ -13,14 +13,8 @@ const (
 	// DateBits is the number of bits used for the birthday
 	DateBits = 10
 
-	// dateBits is the number of bits used for the birthday (internal alias)
-	dateBits = DateBits
-
 	// DateMask is the mask for date bits
 	DateMask = (1 << DateBits) - 1
-
-	// dateMask is the mask for date bits (internal alias)
-	dateMask = DateMask
 )
 
 // birthdayEncode converts a Unix timestamp to a birthday value
@@ -29,7 +23,7 @@ func birthdayEncode(timestamp uint64) uint16 {
 	if timestamp == ^uint64(0) || timestamp < epoch {
 		return 0
 	}
-	return uint16(((timestamp - epoch) / timeStep) & dateMask)
+	return uint16(((timestamp - epoch) / timeStep) & DateMask)
 }
 
 // birthdayDecode converts a birthday value to a Unix timestamp
