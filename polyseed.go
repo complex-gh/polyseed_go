@@ -225,6 +225,49 @@ func Create(features uint8) (*Seed, error) {
 	return seed, nil
 }
 
+// CreateFromBytes creates a new seed from existing secret bytes.
+// The secret bytes should be at least 19 bytes. Only the first 19 bytes
+// (150 bits) will be used, with the last byte masked appropriately.
+//
+// features are the values of the boolean features for this seed. Only
+// the least significant 3 bits are used.
+//
+// Returns the seed and an error if the operation failed.
+func CreateFromBytes(secretBytes []byte, features uint8) (*Seed, error) {
+	if len(secretBytes) < internal.SecretSize {
+		return nil, StatusErrFormat
+	}
+
+	// Check features
+	seedFeatures := makeFeatures(features)
+	if !featuresSupported(seedFeatures) {
+		return nil, StatusErrUnsupported
+	}
+
+	// Create seed
+	seed := &Seed{
+		birthday: birthdayEncode(getTime()),
+		features: seedFeatures,
+	}
+
+	// Copy secret bytes
+	copy(seed.secret[:internal.SecretSize], secretBytes[:internal.SecretSize])
+	seed.secret[internal.SecretSize-1] &= internal.ClearMask
+
+	// Encode polynomial
+	d := seed.toData()
+	p := &internal.GfPoly{}
+	internal.DataToPoly(d, p)
+
+	// Calculate checksum
+	p.Encode()
+	seed.checksum = uint16(p.Coeff[0])
+
+	memzero(d.Secret[:])
+
+	return seed, nil
+}
+
 // Free securely erases the seed data
 func (s *Seed) Free() {
 	memzero(s.secret[:])
