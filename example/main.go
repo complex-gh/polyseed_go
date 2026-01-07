@@ -2,8 +2,8 @@ package main
 
 import (
 	"fmt"
-	"polyseed"
-	"polyseed/lang"
+	"github.com/complex-gh/polyseed_go"
+	"github.com/complex-gh/polyseed_go/lang"
 )
 
 func main() {

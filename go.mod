@@ -1,4 +1,4 @@
-module polyseed
+module github.com/complex-gh/polyseed_go
 
 go 1.25.4
 

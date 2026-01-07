@@ -12,8 +12,8 @@ import (
 	"golang.org/x/crypto/pbkdf2"
 	"golang.org/x/text/unicode/norm"
 
-	"polyseed/internal"
-	"polyseed/lang"
+	"github.com/complex-gh/polyseed_go/internal"
+	"github.com/complex-gh/polyseed_go/lang"
 )
 
 // Constants

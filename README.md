@@ -37,7 +37,9 @@ Additional coins can be added by extending the `Coin` type.
 ## Installation
 
 ```bash
+```bash
 go get github.com/complex-gh/polyseed_go
+```
 ```
 
 ## Quick Start
@@ -49,8 +51,8 @@ package main
 
 import (
     "fmt"
-    "polyseed"
-    "polyseed/lang"
+    "github.com/complex-gh/polyseed_go"
+    "github.com/complex-gh/polyseed_go/lang"
 )
 
 func main() {

@@ -6,8 +6,8 @@ package polyseed
 import (
 	"testing"
 
-	"polyseed/internal"
-	"polyseed/lang"
+	"github.com/complex-gh/polyseed_go/internal"
+	"github.com/complex-gh/polyseed_go/lang"
 )
 
 func TestRoundtripAllLanguages(t *testing.T) {
